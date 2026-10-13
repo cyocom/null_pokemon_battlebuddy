@@ -60,6 +60,21 @@ describe('after a KO', () => {
     expect(sanded.sendIns[0]?.species).toBe('Infernape');
   });
 
+  it('scores the send-in at a custom HP instead of the chipped line', () => {
+    const player = mon({ species: 'Infernape', level: 50, ability: 'Blaze', nature: 'Naive', moves: ['Close Combat'] });
+    const lead = mon({ species: 'Magikarp', level: 5, moves: ['Splash'], curHp: 1 });
+    const fast = mon({ species: 'Infernape', level: 50, ability: 'Blaze', moves: ['Close Combat'] });
+    const wall = mon({ species: 'Wobbuffet', level: 50, ability: 'Shadow Tag', moves: ['Counter'] });
+    const snapshot = fight(player, [lead, fast, wall]);
+    const sanded = afterKo(snapshot, { playerMove: 'Close Combat', opponentMove: '', sand: true, hail: false, status: false, leechSeed: false });
+    const custom = afterKo(snapshot, { playerMove: 'Close Combat', opponentMove: '', sand: true, hail: false, status: false, leechSeed: false, customHp: 1 });
+    expect(sanded.playerHp).toBeLessThan(player.curHp);
+    expect(custom.playerHp).toBe(1);
+    expect(custom.chips).toEqual([]);
+    expect(custom.note).toContain('custom HP 1/');
+    expect(custom.sendIns.length).toBeGreaterThan(0);
+  });
+
   it('does not send anyone in for a move that cannot KO', () => {
     const player = mon({ species: 'Magikarp', level: 5, moves: ['Splash'] });
     const lead = mon({ species: 'Blissey', level: 50, ability: 'Natural Cure', moves: ['Soft-Boiled'] });

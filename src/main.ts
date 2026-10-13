@@ -528,10 +528,21 @@ function buildAfterKo(): void {
     check('ko-hail', 'Hail'),
     check('ko-status', 'Status chip'),
     check('ko-seed', 'Leech Seed'),
+    check('ko-custom-hp', 'Custom HP'),
+    num('ko-hp', 'Your HP', 1, 999),
   );
   const opponent = controls.querySelector('[data-key="ko-opponent-move"]') as HTMLSelectElement;
   opponent.options[0]!.textContent = "They don't hit you";
+  const customHp = controls.querySelector('[data-key="ko-custom-hp"]') as HTMLInputElement;
+  const hpField = controls.querySelector('[data-key="ko-hp"]') as HTMLInputElement;
+  hpField.disabled = true;
+  customHp.addEventListener('change', () => {
+    hpField.disabled = !customHp.checked;
+  });
   controls.addEventListener('change', () => refresh());
+  controls.addEventListener('input', (event) => {
+    if ((event.target as HTMLElement).dataset.key === 'ko-hp') refresh();
+  });
 }
 
 function renderAfterKo(state: BattleSnapshot): void {
@@ -547,6 +558,8 @@ function renderAfterKo(state: BattleSnapshot): void {
   const hail = section.querySelector('[data-key="ko-hail"]') as HTMLInputElement;
   const status = section.querySelector('[data-key="ko-status"]') as HTMLInputElement;
   const seed = section.querySelector('[data-key="ko-seed"]') as HTMLInputElement;
+  const customHp = section.querySelector('[data-key="ko-custom-hp"]') as HTMLInputElement;
+  const hpField = section.querySelector('[data-key="ko-hp"]') as HTMLInputElement;
   if (!player || !ai) {
     note.textContent = 'Set the active Pokémon on both sides.';
     host.replaceChildren();
@@ -560,6 +573,8 @@ function renderAfterKo(state: BattleSnapshot): void {
     section.dataset.monKey = monKey;
     playerSelect.value = bestKoMove(state) ?? player.moves.find(Boolean) ?? '';
     opponentSelect.value = '';
+    customHp.checked = false;
+    hpField.value = String(player.curHp);
   }
   if (section.dataset.chipKey !== chipKey) {
     section.dataset.chipKey = chipKey;
@@ -568,14 +583,21 @@ function renderAfterKo(state: BattleSnapshot): void {
     status.checked = player.status === 'brn' || player.status === 'psn' || player.status === 'tox';
     seed.checked = player.leechSeeded;
   }
-  const report = afterKo(state, {
+  hpField.disabled = !customHp.checked;
+  hpField.max = String(maxHpOf(player));
+  const choice = {
     playerMove: playerSelect.value,
     opponentMove: opponentSelect.value,
     sand: sand.checked,
     hail: hail.checked,
     status: status.checked,
     leechSeed: seed.checked,
-  });
+  };
+  const computed = afterKo(state, choice);
+  if (!customHp.checked) hpField.value = String(Math.max(1, computed.playerHp || player.curHp));
+  const report = customHp.checked
+    ? afterKo(state, { ...choice, customHp: numberValue(section, 'ko-hp', computed.playerHp || player.curHp) })
+    : computed;
   note.textContent = report.note;
   host.replaceChildren();
   if (report.sendIns.length) {
