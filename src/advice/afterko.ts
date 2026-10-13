@@ -8,6 +8,8 @@ export interface AfterKoChoice extends ResidualChoice {
   playerMove: string;
   /** Empty when their attack does not land before the KO. */
   opponentMove: string;
+  /** When set, switch-in scores use this HP instead of the chipped line. */
+  customHp?: number;
 }
 
 export interface AfterKoReport {
@@ -45,21 +47,26 @@ export function afterKo(snapshot: BattleSnapshot, choice: AfterKoChoice): AfterK
     return { ...empty, note: `${choice.playerMove} does not KO ${ai.species}.` };
   }
   const order = moveOrder(snapshot, choice.playerMove, choice.opponentMove);
+  const maxHp = maxHpOf(player);
+  const usingCustomHp = choice.customHp !== undefined;
   let hp = player.curHp;
   const chips: string[] = [];
-  if (choice.opponentMove) {
-    const incoming = estimateDamage(ai, player, choice.opponentMove, snapshot.field, snapshot.opponent.side, snapshot.player.side);
-    const dealt = Math.round(incoming.mean);
-    if (dealt > 0) {
-      hp -= dealt;
-      chips.push(`${choice.opponentMove} ${dealt}`);
+  if (usingCustomHp) {
+    hp = Math.max(1, Math.min(maxHp, Math.round(choice.customHp!)));
+  } else {
+    if (choice.opponentMove) {
+      const incoming = estimateDamage(ai, player, choice.opponentMove, snapshot.field, snapshot.opponent.side, snapshot.player.side);
+      const dealt = Math.round(incoming.mean);
+      if (dealt > 0) {
+        hp -= dealt;
+        chips.push(`${choice.opponentMove} ${dealt}`);
+      }
+    }
+    for (const part of residualChip(player, choice)) {
+      hp -= part.amount;
+      chips.push(`${part.label} ${part.amount}`);
     }
   }
-  for (const part of residualChip(player, choice)) {
-    hp -= part.amount;
-    chips.push(`${part.label} ${part.amount}`);
-  }
-  const maxHp = maxHpOf(player);
   if (hp <= 0) {
     return {
       kos: true,
@@ -84,9 +91,10 @@ export function afterKo(snapshot: BattleSnapshot, choice: AfterKoChoice): AfterK
   };
   const sendIns = bench.length ? postKoSendIn(forSendIn, hp) : [];
   const chipText = chips.length ? ` after ${chips.join(', ')}` : '';
+  const hpText = usingCustomHp ? `custom HP ${hp}/${maxHp}` : `${hp}/${maxHp}${chipText}`;
   const koText = chance < 1 ? `${choice.playerMove} KOs on ${Math.round(chance * 100)}% of rolls` : `${choice.playerMove} KOs`;
   const note = bench.length
-    ? `${koText}. You are at ${hp}/${maxHp}${chipText}. ${order}`
+    ? `${koText}. You are at ${hpText}. ${order}`
     : `${koText}. ${ai.species} is their last Pokémon.`;
   return { kos: true, koChance: chance, playerHp: hp, maxHp, youFaint: false, chips, order, sendIns, note };
 }
